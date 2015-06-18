@@ -5,24 +5,28 @@ from pylint.interfaces import IAstroidChecker
 from pylint.checkers.utils import check_messages
 from pylint.checkers import BaseChecker
 from pylint_django.__pkginfo__ import BASE_ID
-from pylint_django.utils import node_is_subclass, PY3
+from pylint_django.utils import node_is_subclass, PY3, iter_cls_and_bases
 
+
+REPR_NAME = '__str__' if PY3 else '__unicode__'
 
 MESSAGES = {
-    'E%d01' % BASE_ID: ("__unicode__ on a model must be callable (%s)",
+    'E%d01' % BASE_ID: ("%s on a model must be callable (%%s)" % REPR_NAME,
                         'model-unicode-not-callable',
-                        "Django models require a callable __unicode__ method"),
-    'W%d01' % BASE_ID: ("No __unicode__ method on model (%s)",
+                        "Django models require a callable %s method" % REPR_NAME),
+    'W%d01' % BASE_ID: ("No %s method on model (%%s)" % REPR_NAME,
                         'model-missing-unicode',
-                        "Django models should implement a __unicode__ method for string representation"),
+                        "Django models should implement a %s "
+                        "method for string representation" % REPR_NAME),
     'W%d02' % BASE_ID: ("Found __unicode__ method on model (%s). Python3 uses __str__.",
                         'model-has-unicode',
                         "Django models should not implement a __unicode__ "
                         "method for string representation when using Python3"),
-    'W%d03' % BASE_ID: ("Model does not explicitly define __unicode__ (%s)",
+    'W%d03' % BASE_ID: ("Model does not explicitly define %s (%%s)" % REPR_NAME,
                         'model-no-explicit-unicode',
-                        "Django models should implement a __unicode__ method for string representation. "
-                        "A parent class of this model does, but ideally all models should be explicit.")
+                        "Django models should implement a %s method for string representation. "
+                        "A parent class of this model does, but ideally all models should be "
+                        "explicit." % REPR_NAME)
 }
 
 
@@ -54,9 +58,21 @@ class ModelChecker(BaseChecker):
     @check_messages('model-missing-unicode')
     def visit_class(self, node):
         """Class visitor."""
+
         if not node_is_subclass(node, 'django.db.models.base.Model'):
             # we only care about models
             return
+
+        has_py2_compat_decorator = False
+        for cur_node in iter_cls_and_bases(node):
+            if cur_node.qname() == 'django.db.models.base.Model':
+                break
+            if cur_node.decorators is not None:
+                for decorator in cur_node.decorators.nodes:
+                    print decorator
+                    if getattr(decorator, 'name', None) == 'python_2_unicode_compatible':
+                        has_py2_compat_decorator = True
+                        break
 
         for child in node.get_children():
             if _is_meta_with_abstract(child):
@@ -69,7 +85,7 @@ class ModelChecker(BaseChecker):
                     continue
 
                 name = grandchildren[0].name
-                if name != '__unicode__':
+                if name != REPR_NAME:
                     continue
 
                 assigned = grandchildren[1].infered()[0]
@@ -79,18 +95,14 @@ class ModelChecker(BaseChecker):
                 self.add_message('E%s01' % BASE_ID, args=node.name, node=node)
                 return
 
-            if isinstance(child, Function) and child.name == '__unicode__':
-                if PY3:
+            if isinstance(child, Function) and child.name == REPR_NAME:
+                if PY3 and not has_py2_compat_decorator:
                     self.add_message('W%s02' % BASE_ID, args=node.name, node=node)
                 return
 
-        # if we get here, then we have no __unicode__ method directly on the class itself
-        if PY3:
-            return
-
         # a different warning is emitted if a parent declares __unicode__
         for method in node.methods():
-            if method.name == '__unicode__':
+            if method.name == REPR_NAME:
                 # this happens if a parent declares the unicode method but
                 # this node does not
                 self.add_message('W%s03' % BASE_ID, args=node.name, node=node)
@@ -98,9 +110,5 @@ class ModelChecker(BaseChecker):
 
         # if the Django compatibility decorator is used then we don't emit a warning
         # see https://github.com/landscapeio/pylint-django/issues/10
-        if node.decorators is not None:
-            for decorator in node.decorators.nodes:
-                if getattr(decorator, 'name', None) == 'python_2_unicode_compatible':
-                    return
-
-        self.add_message('W%s01' % BASE_ID, args=node.name, node=node)
+        if not has_py2_compat_decorator:
+            self.add_message('W%s01' % BASE_ID, args=node.name, node=node)

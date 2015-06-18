@@ -15,3 +15,7 @@ class ModelName(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ModelSubclass(ModelName):
+    count = models.IntegerField()

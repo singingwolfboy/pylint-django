@@ -29,3 +29,17 @@ def node_is_subclass(cls, subclass_name):
             continue
 
     return False
+
+
+def iter_cls_and_bases(cls):
+    yield cls
+    if cls.bases == YES:
+        return
+
+    for base_cls in cls.bases:
+        try:
+            for inf in base_cls.infered():
+                for yielded in iter_cls_and_bases(inf):
+                    yield yielded
+        except InferenceError:
+            continue

@@ -25,6 +25,9 @@ class SomeModel(models.Model):
 
         print(self.get_some_field_display())
 
+    def __str__(self):
+        print 'some model %s' % self.id
+
 
 class SubclassModel(SomeModel):
     class Meta:
