@@ -392,17 +392,20 @@ def is_model_meta_subclass(node):
     if node.name != 'Meta' or not isinstance(node.parent, ClassDef):
         return False
 
-    parents = ('.Model',  # for the transformed version used here
-               'django.db.models.base.Model',
-               '.Form',
-               'django.forms.forms.Form',
-               '.ModelForm',
-               'django.forms.models.ModelForm',
-               'rest_framework.serializers.ModelSerializer',
-               'rest_framework.generics.GenericAPIView',
-               'rest_framework.viewsets.ReadOnlyModelViewSet',
-               'rest_framework.viewsets.ModelViewSet',
-               'django_filters.filterset.FilterSet',)
+    parents = (
+        '.Model',  # for the transformed version used here
+        'django.db.models.base.Model',
+        '.Form',
+        'django.forms.forms.Form',
+        '.ModelForm',
+        'django.forms.models.ModelForm',
+        'rest_framework.serializers.ModelSerializer',
+        'rest_framework.generics.GenericAPIView',
+        'rest_framework.viewsets.ReadOnlyModelViewSet',
+        'rest_framework.viewsets.ModelViewSet',
+        'django_filters.filterset.FilterSet',
+        'factory.django.DjangoModelFactory',
+    )
     return node_is_subclass(node.parent, *parents)
 
 
